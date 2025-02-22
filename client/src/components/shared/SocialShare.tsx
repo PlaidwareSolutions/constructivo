@@ -31,13 +31,6 @@ export function SocialShare({
   const [showCopied, setShowCopied] = useState(false);
 
   // Fetch project snapshot data if projectId is provided
-  interface snapshot {
-    title: string;
-    description: string;
-    imageCount: number;
-    category: string;
-  }
-
   const { data: snapshot } = useQuery({
     queryKey: [`/api/projects/${projectId}/snapshot`],
     enabled: !!projectId,
@@ -59,7 +52,7 @@ export function SocialShare({
       name: "X (Twitter)",
       icon: SiX,
       url: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
-      color: "hover:text-[#000000]",
+      color: "hover:text-[#000000] dark:hover:text-white",
     },
     {
       name: "LinkedIn",
@@ -92,12 +85,20 @@ export function SocialShare({
           variant="ghost"
           size="icon"
           className={cn(
-            "relative text-primary dark:text-white dark:hover:text-white/80",
-            className,
+            "text-foreground hover:text-foreground/90",
+            "dark:text-white dark:hover:text-white",
+            "bg-background/80 hover:bg-background/90",
+            className
           )}
           aria-label="Share this project"
         >
-          <Share2 className="h-4 w-4" />
+          <motion.div
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Share2 className="h-4 w-4" />
+          </motion.div>
         </Button>
       </HoverCardTrigger>
       <HoverCardContent align="end" className="w-[280px] p-4">
@@ -145,9 +146,10 @@ export function SocialShare({
               className="w-full relative text-foreground hover:bg-accent dark:text-foreground dark:hover:bg-accent/80"
               onClick={copyToClipboard}
             >
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 {showCopied ? (
                   <motion.span
+                    key="copied"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -157,7 +159,15 @@ export function SocialShare({
                     Copied!
                   </motion.span>
                 ) : (
-                  "Copy Link"
+                  <motion.span
+                    key="copy"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center justify-center"
+                  >
+                    Copy Link
+                  </motion.span>
                 )}
               </AnimatePresence>
             </Button>

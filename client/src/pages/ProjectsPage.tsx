@@ -1,5 +1,5 @@
 import { Helmet } from 'react-helmet-async';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ProjectCard } from '@/components/projects/ProjectCard';
 import { ProjectEditor } from '@/components/projects/ProjectEditor';
 import { META_DEFAULTS, COMPANY_NAME } from '@/lib/constants';
@@ -10,7 +10,7 @@ import { Loader2, Search } from 'lucide-react';
 import { PageTransition } from '@/components/shared/PageTransition';
 import { ScrollReveal } from '@/components/shared/ScrollReveal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
 interface User {
@@ -34,22 +34,38 @@ export default function ProjectsPage() {
   const [category, setCategory] = useState("All");
   const [sort, setSort] = useState("newest");
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: projects = [], isLoading, error } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
-    refetchOnWindowFocus: true,
-    staleTime: 0, // Consider all data stale immediately
-    onError: (err) => {
-      toast({
-        variant: "destructive",
-        title: "Error loading projects",
-        description: err instanceof Error ? err.message : "Failed to load projects"
+    queryKey: ['/api/projects'],
+    queryFn: async () => {
+      const response = await fetch('/api/projects', {
+        credentials: 'include'
       });
-    }
+      if (!response.ok) {
+        throw new Error('Failed to fetch projects');
+      }
+      return response.json();
+    },
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    staleTime: 0
   });
 
   const { data: user } = useQuery<User>({
     queryKey: ["/api/user"],
+    queryFn: async () => {
+      const response = await fetch('/api/user', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        if (response.status === 401) {
+          return null;
+        }
+        throw new Error('Failed to fetch user');
+      }
+      return response.json();
+    }
   });
 
   const isAdmin = user?.isAdmin ?? false;
@@ -58,9 +74,9 @@ export default function ProjectsPage() {
     return projects
       .filter((project) => {
         const matchesSearch = project.title.toLowerCase().includes(search.toLowerCase()) ||
-                            project.description.toLowerCase().includes(search.toLowerCase());
+                              project.description.toLowerCase().includes(search.toLowerCase());
         const matchesCategory = category === "All" || 
-                              project.category.toLowerCase() === category.toLowerCase();
+                                project.category.toLowerCase() === category.toLowerCase();
         return matchesSearch && matchesCategory;
       })
       .sort((a, b) => {
@@ -78,6 +94,11 @@ export default function ProjectsPage() {
         }
       });
   }, [projects, search, category, sort]);
+
+  const handleProjectCreated = useCallback(() => {
+    // Force an immediate refetch
+    queryClient.invalidateQueries({ queryKey: ['projects'] });
+  }, [queryClient]);
 
   if (error) {
     return (
@@ -170,7 +191,7 @@ export default function ProjectsPage() {
             </SelectContent>
           </Select>
           {isAdmin && (
-            <ProjectEditor mode="create" />
+            <ProjectEditor mode="create" onProjectCreated={handleProjectCreated} />
           )}
         </div>
 

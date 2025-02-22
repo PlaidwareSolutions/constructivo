@@ -12,6 +12,7 @@ import {
 } from "@db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { setupWebSocket, invalidateAdminCache } from "./websocket";
+import { sendEmail, generateUserActionEmail } from './email';
 
 // Middleware to check if user is admin
 const requireAdmin = (req: any, res: any, next: any) => {
@@ -219,6 +220,183 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error updating user admin status:", error);
       res.status(500).json({ error: "Failed to update user admin status" });
+    }
+  });
+
+  // Create new user (admin only)
+  app.post("/api/users", requireAdmin, async (req, res) => {
+    const { name, email } = req.body;
+
+    try {
+      // Check if user with email already exists
+      const existingUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+
+      if (existingUser.length > 0) {
+        return res.status(400).json({ error: "User with this email already exists" });
+      }
+
+      // Create new user
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          name,
+          email,
+          isAdmin: false,
+        })
+        .returning();
+
+      // Send email notifications
+      const adminName = req.user?.name || 'Administrator';
+
+      // Email to new user
+      const userEmail = generateUserActionEmail('created', newUser, adminName);
+      await sendEmail({
+        to: newUser.email,
+        subject: userEmail.subject,
+        html: userEmail.html,
+      });
+
+      // Email to admin
+      const adminEmail = generateUserActionEmail('created', newUser, adminName);
+      await sendEmail({
+        to: req.user!.email,
+        subject: adminEmail.subject,
+        html: adminEmail.html,
+      });
+
+      // Create notification for admins about new user
+      const adminUsers = await db
+        .select()
+        .from(users)
+        .where(eq(users.isAdmin, true));
+
+      await Promise.all(
+        adminUsers.map((admin) =>
+          createNotification(
+            admin.id,
+            "New User Created",
+            `A new user ${newUser.name} has been added to the system`,
+            "user",
+          ),
+        ),
+      );
+
+      // Broadcast cache invalidation
+      invalidateAdminCache("users");
+      invalidateAdminCache("notifications");
+
+      res.json(newUser);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+
+
+  // Add delete user endpoint (admin only)
+  app.delete("/api/users/:id", requireAdmin, async (req, res) => {
+    const userId = parseInt(req.params.id);
+
+    // Check if trying to delete own account
+    if (req.user?.id === userId) {
+      return res.status(403).json({ error: "Cannot delete your own account" });
+    }
+
+    try {
+      // Get user details before deletion for notifications
+      const [userToDelete] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!userToDelete) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // First delete all notifications for this user
+      await db
+        .delete(notifications)
+        .where(eq(notifications.userId, userId));
+
+      // Then delete the user
+      const [deletedUser] = await db
+        .delete(users)
+        .where(eq(users.id, userId))
+        .returning();
+
+      // Send email notifications
+      const adminName = req.user?.name || 'Administrator';
+
+      // Email to deleted user
+      const userEmail = generateUserActionEmail('deleted', userToDelete, adminName);
+      await sendEmail({
+        to: userToDelete.email,
+        subject: userEmail.subject,
+        html: userEmail.html,
+      });
+
+      // Email to admin
+      const adminEmail = generateUserActionEmail('deleted', userToDelete, adminName);
+      await sendEmail({
+        to: req.user!.email,
+        subject: adminEmail.subject,
+        html: adminEmail.html,
+      });
+
+      // Create notification for admins about deleted user
+      const adminUsers = await db
+        .select()
+        .from(users)
+        .where(eq(users.isAdmin, true));
+
+      await Promise.all(
+        adminUsers.map((admin) =>
+          createNotification(
+            admin.id,
+            "User Deleted",
+            `User ${userToDelete.name} has been removed from the system`,
+            "user",
+          ),
+        ),
+      );
+
+      // Broadcast cache invalidation
+      invalidateAdminCache("users");
+      invalidateAdminCache("notifications");
+
+      res.json(deletedUser);
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  // Add delete project endpoint (admin only)
+  app.delete("/api/projects/:id", requireAdmin, async (req, res) => {
+    try {
+      const [deletedProject] = await db
+        .delete(projects)
+        .where(eq(projects.id, parseInt(req.params.id)))
+        .returning();
+
+      if (!deletedProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Also delete any associated reactions
+      await db
+        .delete(reactions)
+        .where(eq(reactions.projectId, parseInt(req.params.id)));
+
+      res.json(deletedProject);
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      res.status(500).json({ error: "Failed to delete project" });
     }
   });
 

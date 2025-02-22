@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link } from "react-router-dom";
 import { COMPANY_NAME, COMPANY_TAGLINE, STOCK_PHOTOS } from "@/lib/constants";
 import { ParallaxSection } from "@/components/shared/ParallaxSection";
 import { BuildingCollage } from "./BuildingCollage";
@@ -10,7 +10,10 @@ export function Hero() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="relative min-h-[90vh] flex items-center overflow-hidden" ref={containerRef}>
+    <div
+      className="relative min-h-[90vh] flex items-center overflow-hidden"
+      ref={containerRef}
+    >
       <motion.div
         className="absolute inset-0 bg-cover bg-center"
         style={{
@@ -21,7 +24,7 @@ export function Hero() {
       </motion.div>
 
       <ParallaxSection className="container relative mx-auto px-4 py-16">
-        <motion.div 
+        <motion.div
           className="max-w-2xl mx-auto text-center mb-16"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -34,18 +37,26 @@ export function Hero() {
             {COMPANY_TAGLINE}
           </p>
           <p className="text-lg text-white/80 mb-12">
-            We transform spaces with innovative design and superior craftsmanship,
-            creating exceptional residential and commercial buildings that stand the
-            test of time.
+            We transform spaces with innovative design and superior
+            craftsmanship, creating exceptional residential and commercial
+            buildings that stand the test of time.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/projects">
-              <Button size="lg" className="w-full sm:w-auto text-lg">
+              <Button
+                size="lg"
+                variant="secondary"
+                className="w-full sm:w-auto text-lg"
+              >
                 View Our Projects
               </Button>
             </Link>
             <Link to="/services">
-              <Button size="lg" variant="secondary" className="w-full sm:w-auto text-lg">
+              <Button
+                size="lg"
+                variant="secondary"
+                className="w-full sm:w-auto text-lg"
+              >
                 Our Services
               </Button>
             </Link>

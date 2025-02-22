@@ -2,9 +2,9 @@ import { Helmet } from 'react-helmet-async';
 import { useUser } from '@/hooks/use-user';
 import { useLocation } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ColorPalette } from '@/components/admin/ColorPalette';
 import { UserManager } from '@/components/admin/UserManager';
 import { TestimonialManager } from '@/components/admin/TestimonialManager';
+import { ProjectManager } from '@/components/admin/ProjectManager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { COMPANY_NAME } from '@/lib/constants';
@@ -16,7 +16,7 @@ import { NotificationsPopover } from '@/components/shared/NotificationsPopover';
 export default function AdminDashboard() {
   const { user, isLoading, isAdmin } = useUser();
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState("testimonials");
+  const [activeTab, setActiveTab] = useState("projects");
   const queryClient = useQueryClient();
 
   // Enable real-time cache invalidation
@@ -27,15 +27,15 @@ export default function AdminDashboard() {
     const prefetchData = async () => {
       await Promise.all([
         queryClient.prefetchQuery({
+          queryKey: ['/api/projects'],
+          staleTime: 0,
+        }),
+        queryClient.prefetchQuery({
           queryKey: ['/api/testimonials'],
           staleTime: 0,
         }),
         queryClient.prefetchQuery({
           queryKey: ['/api/users'],
-          staleTime: 0,
-        }),
-        queryClient.prefetchQuery({
-          queryKey: ['/api/settings'],
           staleTime: 0,
         }),
         queryClient.prefetchQuery({
@@ -54,14 +54,14 @@ export default function AdminDashboard() {
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     switch (value) {
+      case 'projects':
+        queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+        break;
       case 'testimonials':
         queryClient.invalidateQueries({ queryKey: ['/api/testimonials'] });
         break;
       case 'users':
         queryClient.invalidateQueries({ queryKey: ['/api/users'] });
-        break;
-      case 'theme':
-        queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
         break;
     }
   };
@@ -96,12 +96,16 @@ export default function AdminDashboard() {
             <CardTitle>Welcome, {user.name}</CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="testimonials" value={activeTab} onValueChange={handleTabChange}>
+            <Tabs defaultValue="projects" value={activeTab} onValueChange={handleTabChange}>
               <TabsList>
+                <TabsTrigger value="projects">Projects</TabsTrigger>
                 <TabsTrigger value="testimonials">Testimonials</TabsTrigger>
                 <TabsTrigger value="users">User Management</TabsTrigger>
-                <TabsTrigger value="theme">Theme Settings</TabsTrigger>
               </TabsList>
+
+              <TabsContent value="projects" className="mt-6">
+                <ProjectManager />
+              </TabsContent>
 
               <TabsContent value="testimonials" className="mt-6">
                 <TestimonialManager />
@@ -109,10 +113,6 @@ export default function AdminDashboard() {
 
               <TabsContent value="users" className="mt-6">
                 <UserManager />
-              </TabsContent>
-
-              <TabsContent value="theme" className="mt-6">
-                <ColorPalette />
               </TabsContent>
             </Tabs>
           </CardContent>

@@ -7,42 +7,56 @@ import { COMPANY_NAME, NAVIGATION } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function Header() {
   const { user, logout, isAdmin } = useUser();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
 
+  // Get user initials for the avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   // Close mobile menu when pressing Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && mobileMenuOpen) {
+      if (e.key === "Escape" && mobileMenuOpen) {
         setMobileMenuOpen(false);
       }
     };
 
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
   }, [mobileMenuOpen]);
 
   // Prevent scrolling when mobile menu is open
   useEffect(() => {
     if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = "unset";
     }
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = "unset";
     };
   }, [mobileMenuOpen]);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
-        <nav className="flex h-16 items-center justify-between" aria-label="Main navigation">
-          <Link 
-            to="/" 
+        <nav
+          className="flex h-16 items-center justify-between"
+          aria-label="Main navigation"
+        >
+          <Link
+            to="/"
             className="text-2xl font-bold"
             aria-label={`${COMPANY_NAME} - Return to homepage`}
           >
@@ -56,7 +70,7 @@ export default function Header() {
                 to={item.href}
                 className={cn(
                   "text-sm font-medium transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                  "text-muted-foreground"
+                  "text-muted-foreground",
                 )}
                 role="menuitem"
                 aria-label={item.name}
@@ -71,26 +85,29 @@ export default function Header() {
             <ModeToggle />
 
             {user ? (
-              <>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                </Avatar>
                 {isAdmin && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => navigate("/admin")}
                     aria-label="Go to admin dashboard"
                   >
-                    Dashboard
+                    Admin
                   </Button>
                 )}
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   onClick={() => logout()}
                   aria-label="Log out of your account"
                 >
                   Logout
                 </Button>
-              </>
+              </div>
             ) : (
-              <Button 
+              <Button
                 onClick={() => navigate("/auth")}
                 aria-label="Sign in to your account"
               >
@@ -123,7 +140,7 @@ export default function Header() {
             className="md:hidden"
             aria-label="Mobile navigation"
           >
-            <div 
+            <div
               className="space-y-1 px-4 pb-3 pt-2"
               role="menu"
               aria-orientation="vertical"

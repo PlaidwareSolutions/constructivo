@@ -34,23 +34,44 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, PencilIcon, ImagePlus, X, Maximize2, Upload } from "lucide-react";
+import {
+  Plus,
+  PencilIcon,
+  ImagePlus,
+  X,
+  Maximize2,
+  Upload,
+  Trash as TrashIcon
+} from "lucide-react";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ProjectEditorProps {
   project?: Project;
   mode: "create" | "edit";
+  onProjectCreated?: () => void;
 }
 
 const categories = ["Residential", "Commercial", "Tenant", "Investment"];
 
-export function ProjectEditor({ project, mode }: ProjectEditorProps) {
+export function ProjectEditor({ project, mode, onProjectCreated }: ProjectEditorProps) {
   const [open, setOpen] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>(project?.images || []);
   const [isDragging, setIsDragging] = useState(false);
   const [thumbnailSize, setThumbnailSize] = useState(96);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -84,7 +105,20 @@ export function ProjectEditor({ project, mode }: ProjectEditorProps) {
         images: imageUrls,
       };
 
-      console.log('Submitting form data:', formData);
+      // Create optimistic data
+      const optimisticData = {
+        id: Date.now(),
+        ...formData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Optimistically update the cache
+      if (mode === "create") {
+        queryClient.setQueryData(['/api/projects'], (old: Project[] = []) => {
+          return [optimisticData, ...old];
+        });
+      }
 
       const response = await fetch(
         `/api/projects${mode === "edit" && project ? `/${project.id}` : ""}`,
@@ -104,10 +138,17 @@ export function ProjectEditor({ project, mode }: ProjectEditorProps) {
       }
 
       const savedProject = await response.json();
-      console.log('Project saved:', savedProject);
 
-      // Force refetch instead of just invalidating
-      await queryClient.refetchQueries({ queryKey: ["/api/projects"] });
+      // Update the cache with the real data
+      queryClient.setQueryData(['/api/projects'], (old: Project[] = []) => {
+        if (mode === "create") {
+          return [savedProject, ...old.filter(p => p.id !== optimisticData.id)];
+        }
+        return old.map(p => p.id === project?.id ? savedProject : p);
+      });
+
+      // Call the callback if provided
+      onProjectCreated?.();
 
       toast({
         title: `Project ${mode === "create" ? "created" : "updated"} successfully`,
@@ -170,8 +211,39 @@ export function ProjectEditor({ project, mode }: ProjectEditorProps) {
     setImageUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Calculate grid columns based on thumbnail size
-  const gridCols = Math.floor(600 / (thumbnailSize + 8)); // 600px is approximate container width
+  const handleDelete = async () => {
+    try {
+      setIsDeleting(true);
+      const response = await fetch(`/api/projects/${project?.id}`, {
+        method: "DELETE",
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to delete project");
+      }
+
+      // Force refetch instead of just invalidating
+      await queryClient.refetchQueries({ queryKey: ['projects'] });
+
+      toast({
+        title: "Project deleted successfully",
+        description: `The project "${project?.title}" has been deleted.`,
+      });
+
+      setOpen(false);
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast({
+        variant: "destructive",
+        title: "Failed to delete project",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -388,13 +460,48 @@ export function ProjectEditor({ project, mode }: ProjectEditorProps) {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? (
-                "Saving..."
-              ) : (
-                mode === "create" ? "Create Project" : "Save Changes"
+            <div className="flex justify-between gap-4 mt-8">
+              <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  "Saving..."
+                ) : (
+                  mode === "create" ? "Create Project" : "Save Changes"
+                )}
+              </Button>
+
+              {mode === "edit" && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      type="button"
+                      disabled={isDeleting}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the project
+                        "{project?.title}" and remove all associated data.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {isDeleting ? "Deleting..." : "Delete Project"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               )}
-            </Button>
+            </div>
           </form>
         </Form>
       </SheetContent>

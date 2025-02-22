@@ -6,6 +6,8 @@ import { EmojiReactions } from "@/components/shared/EmojiReactions";
 import { SocialShare } from "@/components/shared/SocialShare";
 import { ImageCarousel } from "./ImageCarousel";
 import { ProjectEditor } from "./ProjectEditor";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/components/ui/use-toast";
 
 interface ProjectCardProps {
   project: Project;
@@ -20,7 +22,35 @@ export function ProjectCard({
   children,
   isAdmin,
 }: ProjectCardProps) {
+  const queryClient = useQueryClient();
   const shareUrl = `${window.location.origin}/projects/${project.id}`;
+  const { toast } = useToast();
+
+  const handleDelete = async (projectId: number) => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete project');
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      toast({
+        title: "Success",
+        description: "Project deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete project",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <Card
@@ -38,14 +68,14 @@ export function ProjectCard({
             <div>
               {isAdmin && <ProjectEditor mode="edit" project={project} />}
             </div>
-            <div>
+            <div className="flex gap-2">
               <SocialShare
                 url={shareUrl}
                 title={project.title}
                 description={project.description}
                 imageUrl={project.images[0]}
                 projectId={project.id}
-                className="bg-background/80 hover:bg-background/90"
+                className="z-10 bg-background/80 hover:bg-background/90"
               />
             </div>
           </div>
